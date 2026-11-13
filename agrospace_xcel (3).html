@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgroSpace Xcel | NASA Satellite Precision Agriculture</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Font Awesome for clean iconography -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Leaflet.js CSS & JS (Real-Time Satellite Mapping) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        space: {
+                            950: '#040812',
+                            900: '#081021',
+                            800: '#0F1B35',
+                            700: '#18294D',
+                        },
+                        agro: {
+                            400: '#34D399',
+                            500: '#10B981',
+                            600: '#059669',
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'orbit': 'orbit 20s linear infinite',
+                        'scan': 'scan 4s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        scan: {
+                            '0%, 100%': { transform: 'translateY(0%)', opacity: '0.2' },
+                            '50%': { transform: 'translateY(100%)', opacity: '0.8' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom subtle grid background for space/satellite feel */
+        .bg-grid-pattern {
+            background-size: 32px 32px;
+            background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        }
+        .light .bg-grid-pattern {
+            background-image: 
+                linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #081021;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #18294D;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #10B981;
+        }
+        /* Smooth transitions for interactive bars */
+        .bar-transition {
+            transition: height 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.3s ease;
+        }
+        /* Leaflet Satellite Map Customization */
+        #satellite-map {
+            height: 430px;
+            width: 100%;
+            z-index: 10;
+            background: #040812;
+        }
+        .leaflet-container {
+            font-family: 'JetBrains Mono', monospace !important;
+        }
+        .leaflet-control-zoom a {
+            background-color: rgba(8, 16, 33, 0.9) !important;
+            color: #e2e8f0 !important;
+            border-color: rgba(51, 65, 85, 0.8) !important;
+        }
+        .leaflet-control-zoom a:hover {
+            background-color: #10B981 !important;
+            color: #ffffff !important;
+        }
+        .leaflet-control-attribution {
+            background: rgba(4, 8, 18, 0.75) !important;
+            color: #94a3b8 !important;
+            font-size: 10px !important;
+        }
+        .leaflet-control-attribution a {
+            color: #34D399 !important;
+        }
+        .sector-tooltip {
+            background: rgba(8, 16, 33, 0.92) !important;
+            border: 1px solid rgba(52, 211, 153, 0.5) !important;
+            color: #f8fafc !important;
+            border-radius: 8px !important;
+            padding: 4px 8px !important;
+            font-family: 'JetBrains Mono', monospace !important;
+            font-size: 11px !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important;
+        }
+        .sector-tooltip::before {
+            border-top-color: rgba(52, 211, 153, 0.5) !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-space-950 dark:text-slate-100 font-sans antialiased selection:bg-agro-500 selection:text-white transition-colors duration-300 bg-grid-pattern min-h-screen flex flex-col">
+
+    <!-- Toast Notification Container (Replaces alert()) -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-3 pointer-events-none"></div>
+
+    <!-- Navigation Bar -->
+    <header class="sticky top-0 z-40 w-full backdrop-blur-md bg-white/80 dark:bg-space-950/85 border-b border-slate-200 dark:border-slate-800/80 transition-colors">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Brand Logo -->
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-agro-500 to-blue-600 flex items-center justify-center shadow-lg shadow-agro-500/20 text-white">
+                        <i class="fa-solid fa-satellite text-lg"></i>
+                    </div>
+                    <div>
+                        <span class="font-extrabold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300">
+                            AgroSpace <span class="text-agro-500">Xcel</span>
+                        </span>
+                        <span class="hidden sm:inline-block ml-2 text-[10px] font-mono uppercase tracking-widest px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                            NASA • MYSA Malaysia Link
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Desktop Navigation Links -->
+                <nav class="hidden lg:flex items-center space-x-1">
+                    <a href="#dashboard" class="nav-link px-3 py-2 rounded-lg text-sm font-medium bg-agro-500/10 text-agro-600 dark:text-agro-400 transition-colors">Dashboard</a>
+                    <a href="#telemetry-bar" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-space-800 transition-colors">Satellite Telemetry</a>
+                    <a href="#analytics-section" onclick="switchChartTab('ndvi')" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-space-800 transition-colors">Crop Health (NDVI)</a>
+                    <a href="#analytics-section" onclick="switchChartTab('moisture')" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-space-800 transition-colors">Soil Moisture</a>
+                    <a href="#alerts-panel" class="nav-link px-3 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-space-800 transition-colors">Weather & Alerts</a>
+                    <button onclick="openModal()" class="px-3 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-space-800 transition-colors">Farm Setup</button>
+                </nav>
+
+                <!-- Right Actions: Theme Toggle, Add Farm CTA, Mobile Menu Button -->
+                <div class="flex items-center gap-2 sm:gap-3">
+                    <button id="theme-toggle" aria-label="Toggle Dark/Light Theme" class="p-2.5 rounded-xl bg-slate-100 dark:bg-space-800 text-slate-600 dark:text-slate-300 hover:text-agro-500 dark:hover:text-agro-400 border border-slate-200 dark:border-slate-700/70 transition-all">
+                        <i id="theme-icon" class="fa-solid fa-sun text-sm"></i>
+                    </button>
+                    <button onclick="openModal()" class="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-agro-500 hover:bg-agro-600 text-white font-semibold text-sm shadow-lg shadow-agro-500/25 transition-all active:scale-95">
+                        <i class="fa-solid fa-plus text-xs"></i>
+                        <span>Connect Farmland</span>
+                    </button>
+                    <button id="mobile-menu-btn" aria-label="Open Navigation Menu" class="lg:hidden p-2.5 rounded-xl bg-slate-100 dark:bg-space-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Dropdown Navigation -->
+        <div id="mobile-menu" class="hidden lg:hidden bg-white dark:bg-space-900 border-b border-slate-200 dark:border-slate-800 px-4 pt-2 pb-4 space-y-1">
+            <a href="#dashboard" class="block px-3 py-2.5 rounded-lg text-base font-medium bg-agro-500/10 text-agro-600 dark:text-agro-400">Dashboard</a>
+            <a href="#telemetry-bar" class="block px-3 py-2.5 rounded-lg text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-space-800">Satellite Telemetry</a>
+            <a href="#analytics-section" onclick="switchChartTab('ndvi')" class="block px-3 py-2.5 rounded-lg text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-space-800">Crop Health (NDVI)</a>
+            <a href="#analytics-section" onclick="switchChartTab('moisture')" class="block px-3 py-2.5 rounded-lg text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-space-800">Soil Moisture</a>
+            <a href="#alerts-panel" class="block px-3 py-2.5 rounded-lg text-base font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-space-800">Weather & Alerts</a>
+            <button onclick="openModal()" class="w-full text-left px-3 py-2.5 rounded-lg text-base font-semibold text-agro-600 dark:text-agro-400 hover:bg-slate-100 dark:hover:bg-space-800">
+                + Farm Setup / Connect Plot
+            </button>
+        </div>
+    </header>
+
+    <!-- Hero & Live NASA Satellite Telemetry Banner -->
+    <section id="telemetry-bar" class="relative overflow-hidden border-b border-slate-200 dark:border-slate-800/80 bg-gradient-to-b from-blue-50/70 via-white to-slate-50 dark:from-space-900 dark:via-space-950 dark:to-space-950 pt-8 pb-10">
+        <!-- Decorative Ambient Glow -->
+        <div class="absolute -top-24 right-1/4 w-96 h-96 bg-agro-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-24 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+                <!-- Hero Copy -->
+                <div class="max-w-2xl">
+                    <div class="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-white dark:bg-space-800/90 border border-slate-200 dark:border-slate-700/80 shadow-sm mb-4">
+                        <span class="relative flex h-2.5 w-2.5">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-agro-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-agro-500"></span>
+                        </span>
+                        <span class="text-xs font-mono font-semibold text-slate-700 dark:text-slate-200 tracking-wide">
+                            NASA EARTHDATA × MYSA MALAYSIA: <span class="text-agro-600 dark:text-agro-400">CONNECTED</span>
+                        </span>
+                    </div>
+                    <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-tight">
+                        Orbital Intelligence for <span class="bg-clip-text text-transparent bg-gradient-to-r from-agro-500 to-cyan-400">Malaysian Agriculture</span>
+                    </h1>
+                    <p class="mt-3 text-base sm:text-lg text-slate-600 dark:text-slate-300 leading-relaxed">
+                        Monitor paddy granaries, oil palm estates, durian orchards, and highland terraces across Peninsular Malaysia, Sabah & Sarawak using real-time NASA satellite streams.
+                    </p>
+                    <div class="mt-6 flex flex-wrap items-center gap-3">
+                        <button onclick="openModal()" class="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-agro-500 hover:bg-agro-600 text-white font-semibold text-sm shadow-lg shadow-agro-500/25 transition-all">
+                            <i class="fa-solid fa-satellite-dish"></i>
+                            <span>Link New Farmland Sector</span>
+                        </button>
+                        <button onclick="syncSatelliteData()" id="sync-btn" class="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-white dark:bg-space-800 hover:bg-slate-50 dark:hover:bg-space-700 text-slate-800 dark:text-slate-200 font-semibold text-sm border border-slate-200 dark:border-slate-700 shadow-sm transition-all">
+                            <i id="sync-icon" class="fa-solid fa-rotate"></i>
+                            <span>Refresh Orbital Pass</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live NASA Constellation Telemetry Card -->
+                <div class="w-full lg:w-[440px] rounded-2xl bg-white/90 dark:bg-space-900/90 backdrop-blur-md border border-slate-200 dark:border-slate-800 p-5 shadow-xl">
+                    <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-tower-broadcast text-blue-500"></i>
+                            <span class="text-xs font-mono font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Active NASA Feeds</span>
+                        </div>
+                        <span id="telemetry-clock" class="text-xs font-mono text-agro-600 dark:text-agro-400 font-medium">UTC 13:24:00</span>
+                    </div>
+
+                    <div class="space-y-3">
+                        <!-- Satellite 1: Landsat 9 -->
+                        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-space-800/70 border border-slate-100 dark:border-slate-700/50">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center">
+                                    <i class="fa-solid fa-leaf text-sm"></i>
+                                </div>
+                                <div>
+                                    <div class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                        Landsat 9 (OLI-2)
+                                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                    </div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">30m Multispectral • NDVI & Biomass</div>
+                                </div>
+                            </div>
+                            <span class="text-xs font-mono px-2 py-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold">99.8% SNR</span>
+                        </div>
+
+                        <!-- Satellite 2: SMAP -->
+                        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-space-800/70 border border-slate-100 dark:border-slate-700/50">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-cyan-500/15 text-cyan-500 flex items-center justify-center">
+                                    <i class="fa-solid fa-droplet text-sm"></i>
+                                </div>
+                                <div>
+                                    <div class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                        NASA SMAP L-Band
+                                        <span class="w-2 h-2 rounded-full bg-cyan-500"></span>
+                                    </div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Radiometer • Topsoil & Root Moisture</div>
+                                </div>
+                            </div>
+                            <span class="text-xs font-mono px-2 py-1 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-semibold">ACTIVE</span>
+                        </div>
+
+                        <!-- Satellite 3: Terra/Aqua MODIS -->
+                        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-space-800/70 border border-slate-100 dark:border-slate-700/50">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-500 flex items-center justify-center">
+                                    <i class="fa-solid fa-temperature-half text-sm"></i>
+                                </div>
+                                <div>
+                                    <div class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                        MODIS / VIIRS Thermal
+                                        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                                    </div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Surface Temp & Evapotranspiration</div>
+                                </div>
+                            </div>
+                            <span class="text-xs font-mono px-2 py-1 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold">PASSING</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Interactive Farm Monitoring Dashboard -->
+    <main id="dashboard" class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+        <!-- Active Farm Header & Spectral Layer Switcher -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-space-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div>
+                <div class="flex items-center gap-2 text-xs font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    <i class="fa-solid fa-location-crosshairs text-agro-500"></i>
+                    <span id="active-coords">6.1248° N, 100.3678° E • KEDAH MADA GRANARY</span>
+                </div>
+                <h2 class="text-2xl font-bold text-slate-900 dark:text-white mt-1 flex items-center gap-3">
+                    <span id="selected-sector-title">Kedah – Muda (MADA) Paddy Granary</span>
+                    <span id="selected-sector-badge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        Optimal Vigor
+                    </span>
+                </h2>
+            </div>
+
+            <!-- Satellite Spectral Layer Filter -->
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 mr-1">Orbital Layer:</span>
+                <button onclick="setMapLayer('ndvi')" id="layer-btn-ndvi" class="layer-btn px-3.5 py-2 rounded-xl text-xs font-semibold bg-agro-500 text-white shadow-sm transition-all">
+                    <i class="fa-solid fa-seedling mr-1.5"></i>NDVI Biomass
+                </button>
+                <button onclick="setMapLayer('moisture')" id="layer-btn-moisture" class="layer-btn px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-space-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-space-700 transition-all">
+                    <i class="fa-solid fa-water mr-1.5"></i>SMAP Moisture
+                </button>
+                <button onclick="setMapLayer('thermal')" id="layer-btn-thermal" class="layer-btn px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-space-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-space-700 transition-all">
+                    <i class="fa-solid fa-fire-flame-curved mr-1.5"></i>MODIS Thermal
+                </button>
+            </div>
+        </div>
+
+        <!-- 4 Key Satellite Metrics Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <!-- Metric 1: NDVI -->
+            <div class="rounded-2xl bg-white dark:bg-space-900 p-5 border border-slate-200 dark:border-slate-800 shadow-sm hover:border-agro-500/50 transition-all">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Crop Health (NDVI)</span>
+                    <div class="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                        <i class="fa-solid fa-leaf"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span id="metric-ndvi" class="text-3xl font-extrabold font-mono text-slate-900 dark:text-white">0.84</span>
+                    <span id="metric-ndvi-delta" class="text-xs font-semibold text-emerald-500 flex items-center gap-1">
+                        <i class="fa-solid fa-arrow-trend-up"></i> +0.04
+                    </span>
+                </div>
+                <div class="mt-3 w-full bg-slate-100 dark:bg-space-800 h-2 rounded-full overflow-hidden">
+                    <div id="bar-ndvi" class="bg-emerald-500 h-full rounded-full transition-all duration-500" style="width: 84%"></div>
+                </div>
+                <p id="metric-ndvi-desc" class="mt-2.5 text-xs text-slate-500 dark:text-slate-400">Dense chlorophyll canopy • Landsat 9</p>
+            </div>
+
+            <!-- Metric 2: Soil Moisture (NASA SMAP) -->
+            <div class="rounded-2xl bg-white dark:bg-space-900 p-5 border border-slate-200 dark:border-slate-800 shadow-sm hover:border-cyan-500/50 transition-all">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Soil Moisture (SMAP)</span>
+                    <div class="w-9 h-9 rounded-xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center">
+                        <i class="fa-solid fa-droplet"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span id="metric-moisture" class="text-3xl font-extrabold font-mono text-slate-900 dark:text-white">34.2%</span>
+                    <span id="metric-moisture-delta" class="text-xs font-semibold text-cyan-500">Volumetric</span>
+                </div>
+                <div class="mt-3 w-full bg-slate-100 dark:bg-space-800 h-2 rounded-full overflow-hidden">
+                    <div id="bar-moisture" class="bg-cyan-500 h-full rounded-full transition-all duration-500" style="width: 68%"></div>
+                </div>
+                <p id="metric-moisture-desc" class="mt-2.5 text-xs text-slate-500 dark:text-slate-400">Root-zone (0–50cm) • Optimal hydration</p>
+            </div>
+
+            <!-- Metric 3: Land Surface Temperature (MODIS) -->
+            <div class="rounded-2xl bg-white dark:bg-space-900 p-5 border border-slate-200 dark:border-slate-800 shadow-sm hover:border-amber-500/50 transition-all">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Surface Temp (MODIS)</span>
+                    <div class="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                        <i class="fa-solid fa-sun"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span id="metric-temp" class="text-3xl font-extrabold font-mono text-slate-900 dark:text-white">29.4°C</span>
+                    <span id="metric-temp-delta" class="text-xs font-semibold text-slate-500 dark:text-slate-400">Tropical LST</span>
+                </div>
+                <div class="mt-3 w-full bg-slate-100 dark:bg-space-800 h-2 rounded-full overflow-hidden">
+                    <div id="bar-temp" class="bg-amber-500 h-full rounded-full transition-all duration-500" style="width: 65%"></div>
+                </div>
+                <p id="metric-temp-desc" class="mt-2.5 text-xs text-slate-500 dark:text-slate-400">Low thermal stress • Terra/Aqua IR</p>
+            </div>
+
+            <!-- Metric 4: Precipitation Forecast (GPM) -->
+            <div class="rounded-2xl bg-white dark:bg-space-900 p-5 border border-slate-200 dark:border-slate-800 shadow-sm hover:border-blue-500/50 transition-all">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">24h Precip (NASA GPM)</span>
+                    <div class="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                        <i class="fa-solid fa-cloud-rain"></i>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span id="metric-precip" class="text-3xl font-extrabold font-mono text-slate-900 dark:text-white">12.4 mm</span>
+                    <span id="metric-precip-prob" class="text-xs font-semibold text-blue-500">65% Prob</span>
+                </div>
+                <div class="mt-3 w-full bg-slate-100 dark:bg-space-800 h-2 rounded-full overflow-hidden">
+                    <div id="bar-precip" class="bg-blue-500 h-full rounded-full transition-all duration-500" style="width: 65%"></div>
+                </div>
+                <p id="metric-precip-desc" class="mt-2.5 text-xs text-slate-500 dark:text-slate-400">IMERG Global Precipitation radar</p>
+            </div>
+        </div>
+
+        <!-- Interactive Farmland Map Grid + AI Insights & Alerts -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Interactive Real-Time Satellite Map (7 Cols) -->
+            <div class="lg:col-span-7 rounded-2xl bg-white dark:bg-space-900 border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-sm flex flex-col justify-between">
+                <div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <i class="fa-solid fa-earth-asia text-agro-500"></i>
+                                Malaysia Real-Time Orbital Satellite Map
+                            </h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Live Earth imagery across Peninsular Malaysia, Sabah & Sarawak + NASA GIBS</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <button onclick="flyToMalaysiaRegion('peninsular')" title="View Peninsular Malaysia" class="text-[11px] font-mono font-semibold px-2 py-1.5 rounded-lg bg-slate-100 dark:bg-space-800 hover:bg-agro-500 hover:text-white text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors">
+                                Peninsular
+                            </button>
+                            <button onclick="flyToMalaysiaRegion('sabah')" title="View Sabah Borneo" class="text-[11px] font-mono font-semibold px-2 py-1.5 rounded-lg bg-slate-100 dark:bg-space-800 hover:bg-agro-500 hover:text-white text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors">
+                                Sabah
+                            </button>
+                            <button onclick="flyToMalaysiaRegion('sarawak')" title="View Sarawak Borneo" class="text-[11px] font-mono font-semibold px-2 py-1.5 rounded-lg bg-slate-100 dark:bg-space-800 hover:bg-agro-500 hover:text-white text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors">
+                                Sarawak
+                            </button>
+                            <button onclick="resetMapView()" title="Overview All Malaysia Plots" class="text-xs font-mono font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-space-800 hover:bg-agro-500 hover:text-white text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors flex items-center gap-1">
+                                <i class="fa-solid fa-expand"></i>
+                                <span>All MY</span>
+                            </button>
+                            <span id="total-hectares-badge" class="text-xs font-mono font-semibold px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-space-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                Total: 1,075 ha
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Real-Time Satellite Map Controls Bar (NASA GIBS + Orbital Ground Track) -->
+                    <div class="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5 mb-3 rounded-xl bg-slate-50 dark:bg-space-800/80 border border-slate-200 dark:border-slate-700/80 text-xs">
+                        <div class="flex items-center gap-3">
+                            <label class="inline-flex items-center gap-2 cursor-pointer font-semibold text-slate-700 dark:text-slate-200">
+                                <input type="checkbox" id="gibs-toggle" onchange="toggleGibsLayer(this.checked)" class="rounded text-agro-500 focus:ring-agro-500 bg-space-900 border-slate-600">
+                                <span>NASA GIBS Live Layer</span>
+                            </label>
+                            <div id="gibs-opacity-wrap" class="hidden sm:flex items-center gap-1.5 text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                                <span>Opacity:</span>
+                                <input type="range" id="gibs-opacity" min="0.1" max="1" step="0.1" value="0.65" oninput="updateGibsOpacity(this.value)" class="w-16 accent-agro-500 cursor-pointer">
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3">
+                            <label class="inline-flex items-center gap-2 cursor-pointer font-semibold text-slate-700 dark:text-slate-200">
+                                <input type="checkbox" id="orbit-track-toggle" checked onchange="toggleOrbitTrack(this.checked)" class="rounded text-cyan-500 focus:ring-cyan-500 bg-space-900 border-slate-600">
+                                <span class="flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+                                    Landsat-9 Track
+                                </span>
+                            </label>
+                            <button onclick="enableMapCoordinatePicker()" id="map-pick-btn" class="px-2.5 py-1 rounded-lg bg-agro-500/15 hover:bg-agro-500 hover:text-white text-agro-600 dark:text-agro-400 font-mono text-[11px] font-semibold border border-agro-500/30 transition-all">
+                                + Pin New Plot
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Real-Time Leaflet Satellite Map Viewport -->
+                    <div class="relative rounded-2xl bg-space-950 border border-slate-800 overflow-hidden shadow-inner">
+                        <!-- Top Telemetry HUD Bar -->
+                        <div class="flex items-center justify-between px-3.5 py-2 bg-space-950/95 border-b border-slate-800 text-[11px] font-mono text-slate-400">
+                            <span id="map-legend-text" class="text-emerald-400 font-semibold">SPECTRAL BAND: B5/B4 (LANDSAT 9 NDVI)</span>
+                            <span id="cursor-gps-readout" class="text-slate-300">CURSOR: 4.2105° N, 101.9758° E</span>
+                        </div>
+
+                        <!-- Coordinate Picker Banner (Shown when picking on map) -->
+                        <div id="picker-banner" class="hidden absolute top-11 inset-x-3 z-30 bg-agro-600/95 text-white px-3.5 py-2 rounded-xl shadow-lg flex items-center justify-between text-xs font-medium backdrop-blur-md">
+                            <span><i class="fa-solid fa-location-dot mr-1.5 animate-bounce"></i> Click anywhere on the Malaysia satellite map to place your farmland sector</span>
+                            <button onclick="cancelMapCoordinatePicker()" class="px-2 py-0.5 rounded bg-black/25 hover:bg-black/40 text-[11px] font-mono">Cancel</button>
+                        </div>
+
+                        <!-- Actual Leaflet Map Canvas -->
+                        <div id="satellite-map"></div>
+
+                        <!-- Quick Sector Selector Pills Bar -->
+                        <div id="farmland-grid" class="flex flex-wrap items-center gap-2 p-3 bg-space-900/95 border-t border-slate-800">
+                            <!-- Dynamically populated sector quick-jump pills -->
+                        </div>
+
+                        <!-- Bottom Map Legend & Scale -->
+                        <div class="px-3.5 py-2 bg-space-950 border-t border-slate-800/90 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400">
+                            <div class="flex items-center gap-3">
+                                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-500"></span> Optimal</span>
+                                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-amber-500"></span> Moderate</span>
+                                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-rose-500"></span> Stress Alert</span>
+                            </div>
+                            <div class="flex items-center gap-2 text-[10px] text-slate-500">
+                                <span>TILES: ESRI WORLD IMAGERY + NASA GIBS</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sector Quick Metadata Footer -->
+                <div class="mt-4 grid grid-cols-3 gap-3 pt-2">
+                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-space-800/60 border border-slate-100 dark:border-slate-800">
+                        <div class="text-[11px] text-slate-500 dark:text-slate-400">Crop Cultivar</div>
+                        <div id="meta-crop" class="text-sm font-bold text-slate-800 dark:text-white mt-0.5">Wetland Paddy (MR297)</div>
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-space-800/60 border border-slate-100 dark:border-slate-800">
+                        <div class="text-[11px] text-slate-500 dark:text-slate-400">Plot Area (ha)</div>
+                        <div id="meta-area" class="text-sm font-bold text-slate-800 dark:text-white mt-0.5">320 ha</div>
+                    </div>
+                    <div class="p-3 rounded-xl bg-slate-50 dark:bg-space-800/60 border border-slate-100 dark:border-slate-800">
+                        <div class="text-[11px] text-slate-500 dark:text-slate-400">Next Sat Overpass</div>
+                        <div id="meta-overpass" class="text-sm font-bold font-mono text-agro-600 dark:text-agro-400 mt-0.5">01h 42m</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actionable AI & Satellite Insights Panel (5 Cols) -->
+            <div id="alerts-panel" class="lg:col-span-5 rounded-2xl bg-white dark:bg-space-900 border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-sm flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <i class="fa-solid fa-brain text-blue-500"></i>
+                                Orbital Agronomic Insights
+                            </h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Automated advisories from NASA & MYSA telemetry</p>
+                        </div>
+                        <span id="alert-count-badge" class="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                            3 Advisories
+                        </span>
+                    </div>
+
+                    <!-- Dynamic Insights Feed -->
+                    <div id="insights-list" class="space-y-3.5">
+                        <!-- Dynamically populated based on selected sector -->
+                    </div>
+                </div>
+
+                <!-- Automated Irrigation Dispatch Action -->
+                <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="text-xs text-slate-500 dark:text-slate-400">
+                            <span class="font-semibold text-slate-700 dark:text-slate-200 block">Smart Pivot Sync Ready</span>
+                            Export variable-rate prescription map
+                        </div>
+                        <button onclick="exportPrescription()" class="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md shadow-blue-600/20 transition-all flex items-center gap-2 shrink-0">
+                            <i class="fa-solid fa-file-export"></i>
+                            <span>Export VRA Map</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 7-Day Satellite Trend Analytics (NDVI & Soil Moisture Interactive Chart) -->
+        <section id="analytics-section" class="rounded-2xl bg-white dark:bg-space-900 border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-sm">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-chart-column text-agro-500"></i>
+                        7-Day Orbital Telemetry Trends — <span id="chart-sector-name" class="text-agro-500">Kedah – Muda (MADA) Paddy Granary</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Historical daily readings synthesized from Landsat 9 & NASA SMAP passes over Malaysia</p>
+                </div>
+
+                <!-- Chart Metric Switcher -->
+                <div class="inline-flex rounded-xl bg-slate-100 dark:bg-space-800 p-1 border border-slate-200 dark:border-slate-700">
+                    <button onclick="switchChartTab('both')" id="tab-both" class="chart-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-space-700 text-slate-900 dark:text-white shadow-sm transition-all">
+                        Combined View
+                    </button>
+                    <button onclick="switchChartTab('ndvi')" id="tab-ndvi" class="chart-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all">
+                        NDVI Vigor
+                    </button>
+                    <button onclick="switchChartTab('moisture')" id="tab-moisture" class="chart-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all">
+                        Soil Moisture
+                    </button>
+                </div>
+            </div>
+
+            <!-- Interactive Bar Visualization Container -->
+            <div class="bg-slate-50 dark:bg-space-950/70 rounded-2xl p-4 sm:p-6 border border-slate-200/80 dark:border-slate-800">
+                <div class="flex items-center justify-end gap-5 mb-4 text-xs font-medium">
+                    <span id="legend-ndvi" class="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                        <span class="w-3 h-3 rounded-sm bg-agro-500"></span> NDVI Index (0.0 – 1.0)
+                    </span>
+                    <span id="legend-moisture" class="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                        <span class="w-3 h-3 rounded-sm bg-cyan-500"></span> Soil Moisture (%)
+                    </span>
+                </div>
+
+                <!-- 7-Day Bars Grid -->
+                <div id="trend-chart-bars" class="grid grid-cols-7 gap-2 sm:gap-6 h-56 items-end pt-6 pb-2 border-b border-slate-200 dark:border-slate-800">
+                    <!-- Rendered dynamically by JS -->
+                </div>
+
+                <!-- X-Axis Days Labels -->
+                <div id="trend-chart-labels" class="grid grid-cols-7 gap-2 sm:gap-6 pt-3 text-center text-xs font-mono text-slate-500 dark:text-slate-400">
+                    <!-- Rendered dynamically by JS -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-space-950 py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-lg bg-agro-500 flex items-center justify-center text-white text-xs">
+                    <i class="fa-solid fa-satellite"></i>
+                </div>
+                <span class="font-bold text-slate-900 dark:text-white">AgroSpace Xcel Malaysia</span>
+                <span class="text-xs text-slate-400">© 2026 Orbital Agritech Systems</span>
+            </div>
+            <div class="text-xs text-slate-500 dark:text-slate-400 font-mono text-center sm:text-right">
+                Telemetry Powered by NASA Landsat-9, SMAP & MODIS × Malaysian Space Agency (MYSA) Geoportal
+            </div>
+        </div>
+    </footer>
+
+    <!-- Modal: Connect New Farmland -->
+    <div id="connect-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
+        <div class="bg-white dark:bg-space-900 border border-slate-200 dark:border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl transform transition-all">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-agro-500/15 text-agro-500 flex items-center justify-center">
+                        <i class="fa-solid fa-satellite-dish text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-white">Connect Malaysian Farmland</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Task NASA Landsat & SMAP satellites to monitor your Malaysian plot</p>
+                    </div>
+                </div>
+                <button onclick="closeModal()" aria-label="Close Modal" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-space-800 transition-colors">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <form id="new-farm-form" onsubmit="handleAddFarmland(event)" class="mt-5 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Field / Ladang Sector Name</label>
+                    <input type="text" id="input-sector-name" required placeholder="e.g., Sekinchan Paddy Lot 14, Selangor" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-space-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-agro-500">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Malaysian Crop Type</label>
+                        <select id="input-crop-type" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-space-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-agro-500">
+                            <option value="Wetland Paddy (MR297)">Wetland Paddy (Padi Sawah)</option>
+                            <option value="Tenera Oil Palm (Elaeis guineensis)">Oil Palm (Kelapa Sawit)</option>
+                            <option value="Musang King & Black Thorn Durian">Durian (Musang King / Duri Hitam)</option>
+                            <option value="Natural Rubber (Hevea brasiliensis)">Rubber (Getah)</option>
+                            <option value="Trinitario Cocoa (Theobroma cacao)">Cocoa (Koko)</option>
+                            <option value="Highland Tea & Vegetables">Highland Vegetables & Tea</option>
+                            <option value="MD2 & Josapine Pineapple">Pineapple (Nanas MD2)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Area Size (Hectares / ha)</label>
+                        <input type="number" id="input-area" required min="2" max="10000" value="120" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-space-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-agro-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Malaysian Agro-Region Preset</label>
+                        <select id="input-region" onchange="updatePresetCoords()" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-space-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-agro-500">
+                            <option value="5.1659, 100.4779">Nibong Tebal, Seberang Perai (Penang)</option>
+                            <option value="6.1248, 100.3678">MADA Granary, Alor Setar (Kedah)</option>
+                            <option value="3.5435, 101.1025">Sekinchan / Tanjung Karang (Selangor)</option>
+                            <option value="4.4718, 101.3767">Cameron Highlands (Pahang)</option>
+                            <option value="2.0301, 103.3185">Kluang Plantation Belt (Johor)</option>
+                            <option value="5.0268, 118.3270">Lahad Datu Agro-Zone (Sabah)</option>
+                            <option value="2.2885, 111.8305">Sibu / Rajang Basin (Sarawak)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+                            <span>Lat, Lon Coordinates</span>
+                            <button type="button" onclick="closeModal(); enableMapCoordinatePicker();" class="text-[10px] text-agro-500 hover:underline font-mono">Pick on MY Map</button>
+                        </label>
+                        <input type="text" id="input-coords" required value="5.1659, 100.4779" placeholder="e.g., 5.1659, 100.4779" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-space-800 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-agro-500">
+                    </div>
+                </div>
+
+                <div class="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-start gap-3">
+                    <i class="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
+                    <p class="text-xs text-slate-600 dark:text-slate-300">
+                        Linking a Malaysian sector subscribes your coordinates to <strong>NASA SMAP L3</strong> daily soil moisture granules, <strong>GPM IMERG</strong> tropical rainfall alerts, and <strong>Landsat 9</strong> passes.
+                    </p>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-space-800 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-agro-500 hover:bg-agro-600 text-white text-sm font-semibold shadow-lg shadow-agro-500/25 transition-all flex items-center gap-2">
+                        <i class="fa-solid fa-link"></i>
+                        <span>Establish Satellite Uplink</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Interactive Application Logic -->
+    <script>
+        // --- 1. Malaysian Farmland Sector Dataset (Authentic Malaysian Coordinates + NASA Telemetry) ---
+        let farmSectors = [
+            {
+                id: 'sector-kdh',
+                code: 'KDH-01',
+                name: 'Kedah – Muda (MADA) Paddy Granary',
+                crop: 'Wetland Paddy (MR297)',
+                area: 320,
+                lat: 6.1248,
+                lng: 100.3678,
+                coords: '6.1248° N, 100.3678° E',
+                polygon: [
+                    [6.1350, 100.3540],
+                    [6.1350, 100.3820],
+                    [6.1140, 100.3820],
+                    [6.1140, 100.3540]
+                ],
+                overpass: '01h 42m',
+                status: 'Optimal Vigor',
+                statusType: 'good',
+                ndvi: 0.85,
+                ndviDelta: '+0.04',
+                ndviDesc: 'Active tillering canopy • Landsat 9',
+                moisture: 44.5,
+                moistureDesc: 'Irrigated paddy bunds • Optimal saturation',
+                temp: 29.4,
+                tempF: '84.9°F',
+                tempDesc: 'Normal tropical lowland LST • MODIS',
+                precip: 18.6,
+                precipProb: '75% Prob',
+                history: {
+                    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Today'],
+                    ndvi: [0.78, 0.79, 0.81, 0.82, 0.83, 0.84, 0.85],
+                    moisture: [42, 43, 45, 44, 43.5, 44, 44.5]
+                },
+                insights: [
+                    {
+                        type: 'success',
+                        title: 'MADA Canal Tertiary Gate Sync Optimal',
+                        text: 'Landsat 9 OLI-2 confirms uniform greenness across 95% of Alor Setar Block A2 during peak vegetative tillering.'
+                    },
+                    {
+                        type: 'info',
+                        title: 'Tropical Convection Shower Incoming',
+                        text: 'NASA GPM IMERG radar detects an 18.6mm afternoon rain cell from the Strait of Malacca. Delay supplementary canal intake.'
+                    },
+                    {
+                        type: 'warning',
+                        title: 'Monitor Brown Planthopper (BPH) Humidity',
+                        text: 'High canopy humidity (84%) and dense foliage warrant routine pest scouting along southern bunds.'
+                    }
+                ]
+            },
+            {
+                id: 'sector-png',
+                code: 'PNG-02',
+                name: 'Penang – Seberang Perai Durian & Paddy',
+                crop: 'Musang King Durian & Paddy',
+                area: 115,
+                lat: 5.1725,
+                lng: 100.4830,
+                coords: '5.1725° N, 100.4830° E',
+                polygon: [
+                    [5.1795, 100.4740],
+                    [5.1795, 100.4920],
+                    [5.1655, 100.4920],
+                    [5.1655, 100.4740]
+                ],
+                overpass: '01h 42m',
+                status: 'Optimal Vigor',
+                statusType: 'good',
+                ndvi: 0.81,
+                ndviDelta: '+0.03',
+                ndviDesc: 'Healthy orchard & paddy mix • Landsat 9',
+                moisture: 36.8,
+                moistureDesc: 'Well-drained orchard soil • SMAP L-Band',
+                temp: 30.1,
+                tempF: '86.2°F',
+                tempDesc: 'Balanced coastal evapotranspiration • MODIS',
+                precip: 14.2,
+                precipProb: '70% Prob',
+                history: {
+                    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Today'],
+                    ndvi: [0.75, 0.76, 0.78, 0.79, 0.80, 0.80, 0.81],
+                    moisture: [34, 35, 38, 37, 36, 36.5, 36.8]
+                },
+                insights: [
+                    {
+                        type: 'success',
+                        title: 'Strong Durian Canopy Chlorophyll Index',
+                        text: 'Nibong Tebal & Sungai Acheh sectors exhibit high leaf vigor (NDVI 0.81), supporting healthy fruit-set development.'
+                    },
+                    {
+                        type: 'info',
+                        title: 'Kerian River Basin Moisture Balance',
+                        text: 'SMAP root-zone moisture at 36.8% prevents waterlogging stress around Musang King & Black Thorn feeder roots.'
+                    }
+                ]
+            },
+            {
+                id: 'sector-jhr',
+                code: 'JHR-03',
+                name: 'Johor – Kluang Oil Palm Estate',
+                crop: 'Tenera Oil Palm (Elaeis guineensis)',
+                area: 360,
+                lat: 2.0301,
+                lng: 103.3185,
+                coords: '2.0301° N, 103.3185° E',
+                polygon: [
+                    [2.0420, 103.3040],
+                    [2.0420, 103.3330],
+                    [2.0180, 103.3330],
+                    [2.0180, 103.3040]
+                ],
+                overpass: '02h 15m',
+                status: 'Moisture Watch',
+                statusType: 'moderate',
+                ndvi: 0.71,
+                ndviDelta: '-0.02',
+                ndviDesc: 'East ridge frond stress • Inspect drainage',
+                moisture: 24.2,
+                moistureDesc: 'Moderate dry spell • SMAP Advisory',
+                temp: 31.8,
+                tempF: '89.2°F',
+                tempDesc: 'Elevated afternoon canopy temp • MODIS',
+                precip: 6.4,
+                precipProb: '40% Prob',
+                history: {
+                    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Today'],
+                    ndvi: [0.75, 0.74, 0.73, 0.73, 0.72, 0.71, 0.71],
+                    moisture: [29, 28, 27, 26, 25, 24.5, 24.2]
+                },
+                insights: [
+                    {
+                        type: 'warning',
+                        title: 'Ganoderma & Moisture Stress Screening',
+                        text: 'Sub-block C4 shows a localized 0.04 NDVI dip alongside 31.8°C surface temp. Flagged for Basal Stem Rot ground inspection.'
+                    },
+                    {
+                        type: 'info',
+                        title: 'Frond Pruning & Mulching Advisory',
+                        text: 'Apply empty fruit bunch (EFB) mulch along sloped terraces to retain root-zone moisture ahead of dry spell.'
+                    }
+                ]
+            },
+            {
+                id: 'sector-phg',
+                code: 'PHG-04',
+                name: 'Pahang – Cameron Highlands Terrace',
+                crop: 'Highland Tea & Temperate Vegetables',
+                area: 65,
+                lat: 4.4718,
+                lng: 101.3767,
+                coords: '4.4718° N, 101.3767° E',
+                polygon: [
+                    [4.4790, 101.3690],
+                    [4.4790, 101.3845],
+                    [4.4645, 101.3845],
+                    [4.4645, 101.3690]
+                ],
+                overpass: '01h 55m',
+                status: 'Optimal Cool',
+                statusType: 'good',
+                ndvi: 0.87,
+                ndviDelta: '+0.02',
+                ndviDesc: 'Dense highland tea flush • Landsat 9',
+                moisture: 38.4,
+                moistureDesc: 'Optimal montane mist & soil hydration',
+                temp: 20.6,
+                tempF: '69.1°F',
+                tempDesc: 'Cool highland microclimate • MODIS LST',
+                precip: 22.0,
+                precipProb: '80% Prob',
+                history: {
+                    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Today'],
+                    ndvi: [0.83, 0.84, 0.85, 0.85, 0.86, 0.86, 0.87],
+                    moisture: [37, 38, 39, 38, 38.5, 38, 38.4]
+                },
+                insights: [
+                    {
+                        type: 'success',
+                        title: 'Prime Tea Flush & Brassica Growth',
+                        text: 'Cool 20.6°C MODIS land surface temperature and steady mist moisture sustain peak highland harvest quality.'
+                    },
+                    {
+                        type: 'warning',
+                        title: 'Slope Runoff & Silt Trap Check',
+                        text: 'NASA GPM forecasts 22mm orographic rainfall; verify terrace drainage channels to prevent topsoil erosion.'
+                    }
+                ]
+            },
+            {
+                id: 'sector-sbh',
+                code: 'SBH-05',
+                name: 'Sabah – Lahad Datu Palm & Cocoa',
+                crop: 'Oil Palm & Trinitario Cocoa',
+                area: 215,
+                lat: 5.0268,
+                lng: 118.3270,
+                coords: '5.0268° N, 118.3270° E',
+                polygon: [
+                    [5.0370, 118.3140],
+                    [5.0370, 118.3400],
+                    [5.0165, 118.3400],
+                    [5.0165, 118.3140]
+                ],
+                overpass: '02h 48m',
+                status: 'Monsoon Alert',
+                statusType: 'alert',
+                ndvi: 0.76,
+                ndviDelta: '-0.03',
+                ndviDesc: 'Heavy cloud/rain surge • Lowland drainage',
+                moisture: 46.8,
+                moistureDesc: 'Near saturation • Northeast Monsoon band',
+                temp: 27.9,
+                tempF: '82.2°F',
+                tempDesc: 'Overcast tropical cooling • MODIS IR',
+                precip: 48.5,
+                precipProb: '90% Prob',
+                history: {
+                    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Today'],
+                    ndvi: [0.80, 0.80, 0.79, 0.78, 0.77, 0.76, 0.76],
+                    moisture: [38, 40, 42, 44, 45, 46, 46.8]
+                },
+                insights: [
+                    {
+                        type: 'danger',
+                        title: 'Northeast Monsoon Heavy Rainfall Surge',
+                        text: 'NASA GPM IMERG detects 48.5mm precipitation over East Sabah. Clear main estate perimeter drains to prevent lowland flooding.'
+                    },
+                    {
+                        type: 'warning',
+                        title: 'Suspend Fertilizer Application',
+                        text: 'High topsoil saturation (46.8%) will cause nutrient leaching. Delay NPK broadcasting until rainfall subsides.'
+                    }
+                ]
+            }
+        ];
+
+        // --- 2. Application & Leaflet Map State ---
+        let selectedSectorId = 'sector-kdh';
+        let activeMapLayer = 'ndvi'; // 'ndvi' | 'moisture' | 'thermal'
+        let activeChartTab = 'both'; // 'both' | 'ndvi' | 'moisture'
+
+        let map = null;
+        let polygonLayerGroup = null;
+        let nasaGibsLayer = null;
+        let satelliteMarker = null;
+        let satelliteOrbitLine = null;
+        let orbitAnimInterval = null;
+        let isPickingMapCoords = false;
+
+        // --- 3. Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initSatelliteMap();
+            renderFarmlandGrid();
+            selectSector(selectedSectorId, false);
+            startTelemetryClock();
+            setupThemeToggle();
+            setupMobileMenu();
+        });
+
+        // --- 3B. Initialize Real-Time Leaflet Satellite Map Centered on Malaysia ---
+        function initSatelliteMap() {
+            map = L.map('satellite-map', {
+                center: [4.2105, 108.5000], // Covers both Peninsular Malaysia & East Malaysia (Sabah/Sarawak)
+                zoom: 6,
+                zoomControl: true
+            });
+
+            // Base Layer: Esri World Imagery (Real High-Resolution Satellite Tiles)
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Imagery © Esri | NASA EOSDIS GIBS × MYSA Malaysia',
+                maxZoom: 19
+            }).addTo(map);
+
+            // Subtle Reference Labels Overlay (Malaysian State Borders, Cities & Roads)
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19,
+                opacity: 0.75
+            }).addTo(map);
+
+            // NASA GIBS Real-Time Daily Satellite Layer (MODIS Terra CorrectedReflectance TrueColor)
+            const gibsDate = new Date(Date.now() - 86400000 * 2).toISOString().split('T')[0];
+            nasaGibsLayer = L.tileLayer(
+                `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${gibsDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+                {
+                    attribution: 'NASA EOSDIS GIBS',
+                    maxNativeZoom: 9,
+                    maxZoom: 19,
+                    opacity: 0.65
+                }
+            );
+
+            // Layer group for interactive Malaysian farmland polygons & pins
+            polygonLayerGroup = L.layerGroup().addTo(map);
+
+            // Live GPS Cursor Readout on Mouse Move
+            map.on('mousemove', (e) => {
+                const latDir = e.latlng.lat >= 0 ? 'N' : 'S';
+                const lngDir = e.latlng.lng >= 0 ? 'E' : 'W';
+                document.getElementById('cursor-gps-readout').textContent = 
+                    `CURSOR: ${Math.abs(e.latlng.lat).toFixed(4)}° ${latDir}, ${Math.abs(e.latlng.lng).toFixed(4)}° ${lngDir}`;
+            });
+
+            // Click-to-Pin Coordinate Picker Handler
+            map.on('click', (e) => {
+                if (!isPickingMapCoords) return;
+                const lat = e.latlng.lat.toFixed(4);
+                const lng = e.latlng.lng.toFixed(4);
+                document.getElementById('input-coords').value = `${lat}, ${lng}`;
+                cancelMapCoordinatePicker();
+                openModal();
+                showToast(`Pinned Malaysian GPS coordinates (${lat}, ${lng})!`, 'success');
+            });
+
+            // Start Live Orbital Satellite Ground-Track Simulation Across Malaysia
+            startSatelliteOrbitSimulation();
+        }
+
+        function startSatelliteOrbitSimulation() {
+            const satIcon = L.divIcon({
+                className: 'custom-sat-icon',
+                html: `<div class="relative flex items-center justify-center w-7 h-7">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-60"></span>
+                        <div class="w-6 h-6 rounded-full bg-space-950 border-2 border-cyan-400 text-cyan-300 flex items-center justify-center shadow-lg text-[10px]">
+                            <i class="fa-solid fa-satellite"></i>
+                        </div>
+                       </div>`,
+                iconSize: [28, 28],
+                iconAnchor: [14, 14]
+            });
+
+            // Descending sun-synchronous orbital path sweeping across Malaysia (North -> South-West)
+            let satLat = 7.4000;
+            let satLng = 104.2000;
+            const pathHistory = [[satLat, satLng]];
+
+            satelliteOrbitLine = L.polyline(pathHistory, {
+                color: '#22d3ee',
+                weight: 2,
+                dashArray: '6, 6',
+                opacity: 0.8
+            }).addTo(map);
+
+            satelliteMarker = L.marker([satLat, satLng], { icon: satIcon })
+                .bindTooltip('LANDSAT-9 (OLI-2) MALAYSIA SWATH • 7.5 km/s', { direction: 'top', className: 'sector-tooltip' })
+                .addTo(map);
+
+            orbitAnimInterval = setInterval(() => {
+                satLat -= 0.045;
+                satLng -= 0.012;
+                if (satLat < 0.8000) {
+                    satLat = 7.4000;
+                    // Alternate between Peninsular Malaysia and Sabah/Sarawak passes
+                    satLng = satLng < 106 ? 117.8000 : 103.5000;
+                    pathHistory.length = 0;
+                }
+                pathHistory.push([satLat, satLng]);
+                if (pathHistory.length > 40) pathHistory.shift();
+
+                satelliteMarker.setLatLng([satLat, satLng]);
+                satelliteOrbitLine.setLatLngs(pathHistory);
+            }, 800);
+        }
+
+        function flyToMalaysiaRegion(region) {
+            if (!map) return;
+            if (region === 'peninsular') {
+                map.flyTo([4.2105, 101.9758], 7, { duration: 1.1 });
+            } else if (region === 'sabah') {
+                map.flyTo([5.4204, 117.0305], 8, { duration: 1.1 });
+            } else if (region === 'sarawak') {
+                map.flyTo([2.5574, 113.0012], 7, { duration: 1.1 });
+            }
+        }
+
+        function toggleGibsLayer(enabled) {
+            if (!map || !nasaGibsLayer) return;
+            if (enabled) {
+                nasaGibsLayer.addTo(map);
+                showToast('NASA GIBS MODIS Terra TrueColor live layer enabled.', 'info');
+            } else {
+                map.removeLayer(nasaGibsLayer);
+            }
+        }
+
+        function updateGibsOpacity(val) {
+            if (nasaGibsLayer) nasaGibsLayer.setOpacity(parseFloat(val));
+        }
+
+        function toggleOrbitTrack(enabled) {
+            if (!map || !satelliteMarker || !satelliteOrbitLine) return;
+            if (enabled) {
+                satelliteMarker.addTo(map);
+                satelliteOrbitLine.addTo(map);
+            } else {
+                map.removeLayer(satelliteMarker);
+                map.removeLayer(satelliteOrbitLine);
+            }
+        }
+
+        function enableMapCoordinatePicker() {
+            isPickingMapCoords = true;
+            document.getElementById('picker-banner').classList.remove('hidden');
+            document.getElementById('satellite-map').style.cursor = 'crosshair';
+            document.getElementById('satellite-map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function cancelMapCoordinatePicker() {
+            isPickingMapCoords = false;
+            document.getElementById('picker-banner').classList.add('hidden');
+            document.getElementById('satellite-map').style.cursor = '';
+        }
+
+        function resetMapView() {
+            if (!map) return;
+            map.flyTo([4.2105, 108.5000], 6, { duration: 1.1 });
+        }
+
+        // --- 4. Render Interactive Farmland Polygons & Quick-Jump Pills ---
+        function renderFarmlandGrid() {
+            const grid = document.getElementById('farmland-grid');
+            grid.innerHTML = '';
+
+            if (polygonLayerGroup) polygonLayerGroup.clearLayers();
+
+            // Update total hectares badge
+            const totalHa = farmSectors.reduce((acc, s) => acc + Number(s.area), 0);
+            document.getElementById('total-hectares-badge').textContent = `Total: ${totalHa.toLocaleString()} ha`;
+
+            farmSectors.forEach(sector => {
+                const isSelected = sector.id === selectedSectorId;
+                
+                // Determine spectral color & readout based on active layer
+                let layerValueText = '';
+                let polyColor = '#10B981';
+
+                if (activeMapLayer === 'ndvi') {
+                    layerValueText = `NDVI ${sector.ndvi.toFixed(2)}`;
+                    polyColor = sector.ndvi >= 0.75 ? '#10B981' : (sector.ndvi >= 0.60 ? '#F59E0B' : '#F43F5E');
+                } else if (activeMapLayer === 'moisture') {
+                    layerValueText = `H₂O ${sector.moisture}%`;
+                    polyColor = sector.moisture >= 28 ? '#06B6D4' : (sector.moisture >= 20 ? '#3B82F6' : '#F59E0B');
+                } else {
+                    layerValueText = `${sector.temp}°C`;
+                    polyColor = sector.temp <= 26 ? '#14B8A6' : (sector.temp <= 30.5 ? '#F59E0B' : '#F43F5E');
+                }
+
+                // Draw GeoJSON-style Interactive Polygon + Pin Marker (visible even at country zoom)
+                if (polygonLayerGroup && sector.polygon) {
+                    const poly = L.polygon(sector.polygon, {
+                        color: isSelected ? '#ffffff' : polyColor,
+                        weight: isSelected ? 3 : 2,
+                        fillColor: polyColor,
+                        fillOpacity: isSelected ? 0.45 : 0.30
+                    });
+
+                    poly.bindTooltip(
+                        `<strong>${sector.code}: ${sector.name}</strong><br/>${layerValueText} • ${sector.area} ha`,
+                        { sticky: true, className: 'sector-tooltip' }
+                    );
+
+                    poly.on('click', (e) => {
+                        L.DomEvent.stopPropagation(e);
+                        selectSector(sector.id, true);
+                    });
+
+                    poly.addTo(polygonLayerGroup);
+
+                    // Add clickable pin marker so Malaysian farm sectors are easy to spot at national zoom
+                    const pinMarker = L.circleMarker([sector.lat, sector.lng], {
+                        radius: isSelected ? 8 : 6,
+                        color: '#ffffff',
+                        weight: 2,
+                        fillColor: polyColor,
+                        fillOpacity: 0.95
+                    });
+
+                    pinMarker.bindTooltip(
+                        `<strong>${sector.code}</strong> • ${layerValueText}`,
+                        { direction: 'top', className: 'sector-tooltip' }
+                    );
+
+                    pinMarker.on('click', (e) => {
+                        L.DomEvent.stopPropagation(e);
+                        selectSector(sector.id, true);
+                    });
+
+                    pinMarker.addTo(polygonLayerGroup);
+                }
+
+                // Render Quick-Jump Sector Pill below the map
+                const dotColor = sector.statusType === 'good' ? 'bg-emerald-500' : 
+                                 sector.statusType === 'moderate' ? 'bg-amber-500' : 'bg-rose-500';
+
+                const pill = document.createElement('button');
+                pill.type = 'button';
+                pill.onclick = () => selectSector(sector.id, true);
+                pill.className = `px-3 py-1.5 rounded-lg text-xs font-mono flex items-center gap-2 border transition-all ${
+                    isSelected 
+                    ? 'bg-agro-500/20 border-agro-400 text-white font-bold shadow-sm' 
+                    : 'bg-space-800/80 border-slate-700 text-slate-300 hover:border-slate-500'
+                }`;
+
+                pill.innerHTML = `
+                    <span class="w-2 h-2 rounded-full ${dotColor}"></span>
+                    <span>${sector.code}</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-black/30 text-agro-300">${layerValueText}</span>
+                `;
+
+                grid.appendChild(pill);
+            });
+        }
+
+        // --- 5. Select a Sector & Fly Map + Update All Dashboard Widgets ---
+        function selectSector(sectorId, flyToMap = true) {
+            selectedSectorId = sectorId;
+            const sector = farmSectors.find(s => s.id === sectorId);
+            if (!sector) return;
+
+            // Re-render polygons & pills to highlight active selection
+            renderFarmlandGrid();
+
+            // Smoothly fly real-time satellite map to selected Malaysian farmland polygon
+            if (flyToMap && map && sector.lat && sector.lng) {
+                map.flyTo([sector.lat, sector.lng], 13, { duration: 1.2 });
+            }
+
+            // Update Header Info
+            document.getElementById('active-coords').textContent = `${sector.coords} • MYSA / NASA TELEMETRY LOCKED`;
+            document.getElementById('selected-sector-title').textContent = sector.name;
+            document.getElementById('chart-sector-name').textContent = sector.name;
+
+            const badge = document.getElementById('selected-sector-badge');
+            badge.textContent = sector.status;
+            if (sector.statusType === 'good') {
+                badge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20';
+            } else if (sector.statusType === 'moderate') {
+                badge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20';
+            } else {
+                badge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20';
+            }
+
+            // Update 4 Key Metric Cards
+            document.getElementById('metric-ndvi').textContent = sector.ndvi.toFixed(2);
+            const ndviDeltaEl = document.getElementById('metric-ndvi-delta');
+            const isPositive = !sector.ndviDelta.startsWith('-');
+            ndviDeltaEl.className = `text-xs font-semibold flex items-center gap-1 ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`;
+            ndviDeltaEl.innerHTML = `<i class="fa-solid ${isPositive ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}"></i> ${sector.ndviDelta}`;
+            document.getElementById('bar-ndvi').style.width = `${Math.min(100, Math.round(sector.ndvi * 100))}%`;
+            document.getElementById('metric-ndvi-desc').textContent = sector.ndviDesc;
+
+            document.getElementById('metric-moisture').textContent = `${sector.moisture}%`;
+            document.getElementById('bar-moisture').style.width = `${Math.min(100, Math.round(sector.moisture * 2))}%`;
+            document.getElementById('metric-moisture-desc').textContent = sector.moistureDesc;
+
+            document.getElementById('metric-temp').textContent = `${sector.temp}°C`;
+            document.getElementById('metric-temp-delta').textContent = sector.tempF;
+            document.getElementById('bar-temp').style.width = `${Math.min(100, Math.round((sector.temp / 45) * 100))}%`;
+            document.getElementById('metric-temp-desc').textContent = sector.tempDesc;
+
+            document.getElementById('metric-precip').textContent = `${sector.precip} mm`;
+            document.getElementById('metric-precip-prob').textContent = sector.precipProb;
+            document.getElementById('bar-precip').style.width = `${parseInt(sector.precipProb)}%`;
+
+            // Update Sector Metadata Footer
+            document.getElementById('meta-crop').textContent = sector.crop;
+            document.getElementById('meta-area').textContent = `${sector.area} ha`;
+            document.getElementById('meta-overpass').textContent = sector.overpass;
+
+            // Update AI Insights & Alerts Panel
+            renderInsights(sector);
+
+            // Update 7-Day Telemetry Chart
+            renderTrendChart(sector);
+        }
+
+        // --- 6. Switch Map Spectral Layer ---
+        function setMapLayer(layer) {
+            activeMapLayer = layer;
+            
+            // Update button active styles
+            document.querySelectorAll('.layer-btn').forEach(btn => {
+                btn.className = 'layer-btn px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-space-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-space-700 transition-all';
+            });
+            const activeBtn = document.getElementById(`layer-btn-${layer}`);
+            if (activeBtn) {
+                activeBtn.className = 'layer-btn px-3.5 py-2 rounded-xl text-xs font-semibold bg-agro-500 text-white shadow-sm transition-all';
+            }
+
+            // Update Map Legend Text
+            const legendMap = {
+                ndvi: 'SPECTRAL BAND: B5/B4 (LANDSAT 9 NDVI)',
+                moisture: 'RADIOMETER: L-BAND 1.41 GHZ (NASA SMAP)',
+                thermal: 'THERMAL IR: BAND 31/32 (MODIS LST)'
+            };
+            document.getElementById('map-legend-text').textContent = legendMap[layer];
+
+            renderFarmlandGrid();
+        }
+
+        // --- 7. Render AI Insights & Alerts ---
+        function renderInsights(sector) {
+            const list = document.getElementById('insights-list');
+            list.innerHTML = '';
+            document.getElementById('alert-count-badge').textContent = `${sector.insights.length} Advisories`;
+
+            sector.insights.forEach(item => {
+                let iconClass = 'fa-circle-info text-blue-500';
+                let borderClass = 'border-blue-500/20 bg-blue-500/5';
+
+                if (item.type === 'success') {
+                    iconClass = 'fa-circle-check text-emerald-500';
+                    borderClass = 'border-emerald-500/20 bg-emerald-500/5';
+                } else if (item.type === 'warning') {
+                    iconClass = 'fa-triangle-exclamation text-amber-500';
+                    borderClass = 'border-amber-500/25 bg-amber-500/5';
+                } else if (item.type === 'danger') {
+                    iconClass = 'fa-radiation text-rose-500';
+                    borderClass = 'border-rose-500/30 bg-rose-500/10';
+                }
+
+                const el = document.createElement('div');
+                el.className = `p-3.5 rounded-xl border ${borderClass} transition-all`;
+                el.innerHTML = `
+                    <div class="flex items-start gap-3">
+                        <i class="fa-solid ${iconClass} mt-0.5 text-sm"></i>
+                        <div>
+                            <h4 class="text-sm font-bold text-slate-900 dark:text-white">${item.title}</h4>
+                            <p class="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">${item.text}</p>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(el);
+            });
+        }
+
+        // --- 8. Render 7-Day Interactive Telemetry Bar Chart ---
+        function switchChartTab(tab) {
+            activeChartTab = tab;
+            document.querySelectorAll('.chart-tab').forEach(btn => {
+                btn.className = 'chart-tab px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all';
+            });
+            const active = document.getElementById(`tab-${tab}`);
+            if (active) {
+                active.className = 'chart-tab px-3 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-space-700 text-slate-900 dark:text-white shadow-sm transition-all';
+            }
+
+            // Toggle Legend Visibility
+            document.getElementById('legend-ndvi').style.display = (tab === 'moisture') ? 'none' : 'flex';
+            document.getElementById('legend-moisture').style.display = (tab === 'ndvi') ? 'none' : 'flex';
+
+            const sector = farmSectors.find(s => s.id === selectedSectorId);
+            if (sector) renderTrendChart(sector);
+        }
+
+        function renderTrendChart(sector) {
+            const barsContainer = document.getElementById('trend-chart-bars');
+            const labelsContainer = document.getElementById('trend-chart-labels');
+            barsContainer.innerHTML = '';
+            labelsContainer.innerHTML = '';
+
+            sector.history.days.forEach((day, idx) => {
+                const ndviVal = sector.history.ndvi[idx];
+                const moistVal = sector.history.moisture[idx];
+
+                const ndviHeightPct = Math.min(100, Math.round(ndviVal * 100));
+                const moistHeightPct = Math.min(100, Math.round((moistVal / 50) * 100)); // scaled to 50% max soil moisture
+
+                const col = document.createElement('div');
+                col.className = 'h-full flex items-end justify-center gap-1.5 sm:gap-2 group relative';
+
+                let barsHTML = '';
+                if (activeChartTab === 'both' || activeChartTab === 'ndvi') {
+                    barsHTML += `
+                        <div class="w-3 sm:w-5 bg-agro-500 hover:bg-agro-400 rounded-t-md bar-transition relative flex justify-center" style="height: ${ndviHeightPct}%">
+                            <span class="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-6 text-[10px] font-mono font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded pointer-events-none">
+                                ${ndviVal.toFixed(2)}
+                            </span>
+                        </div>
+                    `;
+                }
+                if (activeChartTab === 'both' || activeChartTab === 'moisture') {
+                    barsHTML += `
+                        <div class="w-3 sm:w-5 bg-cyan-500 hover:bg-cyan-400 rounded-t-md bar-transition relative flex justify-center" style="height: ${moistHeightPct}%">
+                            <span class="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-6 text-[10px] font-mono font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded pointer-events-none">
+                                ${moistVal}%
+                            </span>
+                        </div>
+                    `;
+                }
+
+                col.innerHTML = barsHTML;
+                barsContainer.appendChild(col);
+
+                const label = document.createElement('div');
+                label.className = idx === 6 ? 'font-bold text-agro-600 dark:text-agro-400' : '';
+                label.textContent = day;
+                labelsContainer.appendChild(label);
+            });
+        }
+
+        // --- 9. Modal & Connect New Farmland Logic ---
+        function openModal() {
+            const modal = document.getElementById('connect-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('connect-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function updatePresetCoords() {
+            const regionSelect = document.getElementById('input-region');
+            document.getElementById('input-coords').value = regionSelect.value;
+        }
+
+        function handleAddFarmland(event) {
+            event.preventDefault();
+            const name = document.getElementById('input-sector-name').value.trim();
+            const crop = document.getElementById('input-crop-type').value;
+            const area = parseInt(document.getElementById('input-area').value, 10) || 100;
+            const rawCoords = document.getElementById('input-coords').value.trim();
+
+            // Parse numeric Lat, Lon coordinates (default to Nibong Tebal, Penang, Malaysia)
+            let lat = 5.1659;
+            let lng = 100.4779;
+            const matches = rawCoords.match(/-?\d+(\.\d+)?/g);
+            if (matches && matches.length >= 2) {
+                lat = parseFloat(matches[0]);
+                lng = parseFloat(matches[1]);
+                if (rawCoords.toUpperCase().includes('S') && lat > 0) lat = -lat;
+                if (rawCoords.toUpperCase().includes('W') && lng > 0) lng = -lng;
+            }
+
+            // Generate bounding polygon proportional to hectare size around the coordinates
+            const offset = Math.max(0.004, Math.min(0.018, Math.sqrt(area) * 0.0005));
+            const polygon = [
+                [lat + offset, lng - offset * 1.3],
+                [lat + offset, lng + offset * 1.3],
+                [lat - offset, lng + offset * 1.3],
+                [lat - offset, lng - offset * 1.3]
+            ];
+
+            const latDir = lat >= 0 ? 'N' : 'S';
+            const lngDir = lng >= 0 ? 'E' : 'W';
+            const formattedCoords = `${Math.abs(lat).toFixed(4)}° ${latDir}, ${Math.abs(lng).toFixed(4)}° ${lngDir}`;
+
+            const newCode = `MY-0${farmSectors.length + 1}`;
+            const newId = `sector-${Date.now()}`;
+
+            // Generate realistic simulated NASA metrics for the newly linked Malaysian plot
+            const simNdvi = +(0.74 + Math.random() * 0.14).toFixed(2);
+            const simMoist = +(31.0 + Math.random() * 11).toFixed(1);
+            const simTemp = +(27.5 + Math.random() * 3.5).toFixed(1);
+
+            const newSector = {
+                id: newId,
+                code: newCode,
+                name: name,
+                crop: crop,
+                area: area,
+                lat: lat,
+                lng: lng,
+                coords: formattedCoords,
+                polygon: polygon,
+                overpass: '01h 12m',
+                status: 'Uplink Active',
+                statusType: 'good',
+                ndvi: simNdvi,
+                ndviDelta: '+0.03',
+                ndviDesc: 'Initial Landsat 9 calibration complete',
+                moisture: simMoist,
+                moistureDesc: 'NASA SMAP L3 granule synced',
+                temp: simTemp,
+                tempF: `${((simTemp * 9/5) + 32).toFixed(1)}°F`,
+                tempDesc: 'Normal tropical baseline • MODIS',
+                precip: 15.4,
+                precipProb: '65% Prob',
+                history: {
+                    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Today'],
+                    ndvi: [
+                        +(simNdvi - 0.06).toFixed(2),
+                        +(simNdvi - 0.05).toFixed(2),
+                        +(simNdvi - 0.04).toFixed(2),
+                        +(simNdvi - 0.03).toFixed(2),
+                        +(simNdvi - 0.02).toFixed(2),
+                        +(simNdvi - 0.01).toFixed(2),
+                        simNdvi
+                    ],
+                    moisture: [30, 31, 32, 31.5, 33, 34, simMoist]
+                },
+                insights: [
+                    {
+                        type: 'success',
+                        title: 'Malaysian Satellite Uplink Established',
+                        text: `Coordinates (${formattedCoords}) successfully registered with Landsat 9, GPM IMERG, and SMAP orbital passes.`
+                    },
+                    {
+                        type: 'info',
+                        title: 'Tropical Baseline Calibration Ready',
+                        text: `Initial NDVI (${simNdvi}) and root-zone moisture (${simMoist}%) indicate healthy crop establishment.`
+                    }
+                ]
+            };
+
+            farmSectors.push(newSector);
+            closeModal();
+            document.getElementById('new-farm-form').reset();
+            selectSector(newId, true);
+            showToast(`Connected "${name}" and plotted polygon on Malaysia map!`, 'success');
+        }
+
+        // --- 10. Simulate Live Orbital Pass Sync ---
+        function syncSatelliteData() {
+            const icon = document.getElementById('sync-icon');
+            icon.classList.add('fa-spin');
+            
+            setTimeout(() => {
+                icon.classList.remove('fa-spin');
+                const sector = farmSectors.find(s => s.id === selectedSectorId);
+                if (sector) {
+                    // Subtle live telemetry jitter
+                    sector.ndvi = Math.min(0.95, Math.max(0.35, +(sector.ndvi + (Math.random() * 0.02 - 0.01)).toFixed(2)));
+                    sector.moisture = Math.min(48, Math.max(12, +(sector.moisture + (Math.random() * 0.6 - 0.3)).toFixed(1)));
+                    sector.history.ndvi[6] = sector.ndvi;
+                    sector.history.moisture[6] = sector.moisture;
+                    selectSector(selectedSectorId, false);
+                }
+                showToast('Telemetry refreshed from NASA Earthdata Ground Station.', 'info');
+            }, 650);
+        }
+
+        // --- 11. Export Variable-Rate Prescription Map Action ---
+        function exportPrescription() {
+            const sector = farmSectors.find(s => s.id === selectedSectorId);
+            if (sector) {
+                showToast(`Generated GeoJSON VRA Irrigation Map for ${sector.name}.`, 'success');
+            }
+        }
+
+        // --- 12. Live MYT (UTC+8) & UTC Telemetry Clock ---
+        function startTelemetryClock() {
+            const clockEl = document.getElementById('telemetry-clock');
+            const updateClock = () => {
+                const now = new Date();
+                const utcStr = now.toISOString().substring(11, 19);
+                const mytDate = new Date(now.getTime() + 8 * 3600 * 1000);
+                const mytStr = mytDate.toISOString().substring(11, 19);
+                clockEl.textContent = `MYT ${mytStr} • UTC ${utcStr}`;
+            };
+            updateClock();
+            setInterval(updateClock, 1000);
+        }
+
+        // --- 13. Dark / Light Theme Toggle ---
+        function setupThemeToggle() {
+            const btn = document.getElementById('theme-toggle');
+            const icon = document.getElementById('theme-icon');
+            const html = document.documentElement;
+
+            btn.addEventListener('click', () => {
+                if (html.classList.contains('dark')) {
+                    html.classList.remove('dark');
+                    html.classList.add('light');
+                    icon.className = 'fa-solid fa-moon text-sm';
+                } else {
+                    html.classList.remove('light');
+                    html.classList.add('dark');
+                    icon.className = 'fa-solid fa-sun text-sm';
+                }
+            });
+        }
+
+        // --- 14. Mobile Menu Toggle ---
+        function setupMobileMenu() {
+            const btn = document.getElementById('mobile-menu-btn');
+            const menu = document.getElementById('mobile-menu');
+            btn.addEventListener('click', () => {
+                menu.classList.toggle('hidden');
+            });
+            menu.querySelectorAll('a, button').forEach(item => {
+                item.addEventListener('click', () => menu.classList.add('hidden'));
+            });
+        }
+
+        // --- 15. Custom Toast Notification System ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const borderAccent = type === 'success' ? 'border-agro-500/50' : 'border-blue-500/50';
+            const iconHtml = type === 'success' 
+                ? '<i class="fa-solid fa-circle-check text-agro-500"></i>' 
+                : '<i class="fa-solid fa-satellite-dish text-blue-400"></i>';
+
+            toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-space-800 text-slate-900 dark:text-white border ${borderAccent} shadow-xl text-xs sm:text-sm font-medium transform transition-all duration-300 translate-y-2 opacity-0`;
+            toast.innerHTML = `${iconHtml}<span>${message}</span>`;
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+    </script>
+</body>
+</html>
