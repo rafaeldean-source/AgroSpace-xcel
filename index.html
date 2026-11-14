@@ -126,33 +126,25 @@
             border-top-color: rgba(52, 211, 153, 0.5) !important;
         }
     </style>
-          /* Live Space Background Styling */
-.live-space-bg {
-  position: fixed;
-  inset: 0;
-  z-index: -10;
-  overflow: hidden;
-  pointer-events: none; /* Allows users to click buttons right through the video */
-  background: #020617;
-}
-
-.live-space-bg iframe {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 100vw;
-  height: 56.25vw; /* 16:9 aspect ratio */
-  min-height: 100vh;
-  min-width: 177.77vh;
-  transform: translate(-50%, -50%) scale(1.15); /* Zooms past YouTube player borders */
-}
-
-.space-overlay {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at center, rgba(2, 6, 23, 0.55) 0%, rgba(2, 6, 23, 0.90) 100%);
+        /* Glassmorphism Card Style */
+.card, .dashboard-card, .panel, header {
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: #f8fafc;
 }
 </head>
+    body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(rgba(2, 6, 23, 0.75), rgba(2, 6, 23, 0.90)), 
+              url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1920&auto=format&fit=crop') no-repeat center center fixed;
+  background-size: cover;
+  color: #f8fafc;
+  font-family: system-ui, -apple-system, sans-serif;
+}
 <body class="bg-slate-50 text-slate-900 dark:bg-space-950 dark:text-slate-100 font-sans antialiased selection:bg-agro-500 selection:text-white transition-colors duration-300 bg-grid-pattern min-h-screen flex flex-col">
 
     <!-- Toast Notification Container (Replaces alert()) -->
@@ -1781,21 +1773,4 @@
         }
     </script>
 </body>
-  <div class="live-space-bg">
-    <iframe 
-      src="https://www.youtube.com/embed/P9C25Un7xaM?autoplay=1&mute=1&loop=1&playlist=P9C25Un7xaM&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1" 
-      frameborder="0" 
-      allow="autoplay; encrypted-media" 
-      allowfullscreen>
-    </iframe>
-    <div class="space-overlay"></div>
-  </div>
-
-  <header>
-  </header>
-
-  <main>
-  </main>
-    <body>
-
 </html>
