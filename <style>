@@ -1,0 +1,27 @@
+<style>
+/* Live Space Background Styling */
+.live-space-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  overflow: hidden;
+  pointer-events: none; /* Allows users to click buttons right through the video */
+  background: #020617;
+}
+
+.live-space-bg iframe {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100vw;
+  height: 56.25vw; /* 16:9 aspect ratio */
+  min-height: 100vh;
+  min-width: 177.77vh;
+  transform: translate(-50%, -50%) scale(1.15); /* Zooms past YouTube player borders */
+}
+
+.space-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(2, 6, 23, 0.55) 0%, rgba(2, 6, 23, 0.90) 100%);
+}
